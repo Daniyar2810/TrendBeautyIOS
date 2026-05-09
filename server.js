@@ -2,14 +2,9 @@ import express from "express";
 import cors from "cors";
 import axios from "axios";
 import admin from "firebase-admin";
-import fs from "fs";
-
 const serviceAccount =
   JSON.parse(
-    fs.readFileSync(
-      "./serviceAccountKey.json",
-      "utf8"
-    )
+    process.env.FIREBASE_SERVICE_ACCOUNT
   );
 admin.initializeApp({
   credential:
