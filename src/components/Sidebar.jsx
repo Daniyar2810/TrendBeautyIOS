@@ -21,6 +21,14 @@
         {
             key: 'employees',
             label: 'Uzman Kadrosu'
+        },
+        {
+            key: 'available-times',
+            label: 'Boş Saatler'
+        },
+        {
+            key: 'calendar',
+            label: 'Takvim'
         }
 
     ]

@@ -21,7 +21,7 @@ const app = initializeApp(firebaseConfig);
 export const messaging = getMessaging(app);
 
 export async function requestNotificationPermission() {
-
+    console.log("BİLDİRİM İZNİ BAŞLADI");
   const permission =
     await Notification.requestPermission();
 
@@ -35,7 +35,24 @@ export async function requestNotificationPermission() {
       }
     );
 
-    console.log("FCM TOKEN:", token);
+      console.log("FCM TOKEN:", token);
+      console.log("SAVE TOKEN ÇALIŞTI");
+
+      await fetch(
+          "https://trendbeauty-server.onrender.com/save-token",
+          {
+              method: "POST",
+
+              headers: {
+                  "Content-Type": "application/json",
+              },
+
+              body: JSON.stringify({
+                  token,
+              }),
+          }
+      );
+
 
     return token;
   }

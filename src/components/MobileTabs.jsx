@@ -21,6 +21,14 @@
         {
             key: 'employees',
             label: 'Uzmanlar'
+        },
+        {
+            key: 'available-times',
+            label: 'Boş Saatler'
+        },
+        {
+            key: 'calendar',
+            label: 'Takvim'
         }
 
     ]

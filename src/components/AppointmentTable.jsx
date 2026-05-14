@@ -98,17 +98,25 @@
                                     {/* CUSTOMER */}
                                     <td className="p-4">
 
-                                        <div className="font-bold text-gray-900">
+                                        <a
+                                            href={`https://wa.me/${app.customer_phone}`}
+                                        >
 
-                                            {app.customer_name}
+                                            <div className="font-bold text-gray-900">
 
-                                        </div>
+                                                {app.customer_name}
 
-                                        <div className="text-xs text-gray-400">
+                                            </div>
+                                        </a>
+
+                                        <a
+                                            href={`tel:${app.customer_phone}`}
+                                            className="text-xs text-blue-600 hover:underline font-medium"
+                                        >
 
                                             {app.customer_phone}
 
-                                        </div>
+                                        </a>
 
                                     </td>
 
@@ -140,7 +148,7 @@
 
                                         <div className="text-xs text-gray-400">
 
-                                            {app.start_time}
+                                            {app.appointment_start_time}
                                             {' - '}
                                             {app.end_time}
 

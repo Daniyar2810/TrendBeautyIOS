@@ -12,7 +12,9 @@
 
     setFormData,
 
-    onSubmit
+    onSubmit,
+    employees,
+    services
 
 }) {
 
@@ -163,7 +165,7 @@
 
                                     {item?.appointment_date}
                                     {' | '}
-                                    {item?.start_time}
+                                    {item?.appointment_start_time}
 
                                 </p>
 
@@ -195,6 +197,163 @@
                                 </option>
 
                             </select>
+                            {/* DATE */}
+                            <div>
+
+                                <label className="block mb-2 text-sm font-medium">
+
+                                    Randevu Tarihi
+
+                                </label>
+
+                                <input
+                                    type="date"
+
+                                    value={formData.appointment_date || ''}
+
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            appointment_date: e.target.value
+                                        })
+                                    }
+
+                                    className="w-full bg-gray-100 p-4 rounded-xl outline-none"
+                                />
+
+                            </div>
+
+                            {/* START TIME */}
+                            <div>
+
+                                <label className="block mb-2 text-sm font-medium">
+
+                                    Başlangıç Saati
+
+                                </label>
+
+                                <input
+                                    type="time"
+
+                                    value={
+                                        formData.appointment_start_time
+                                            ? formData.appointment_start_time.slice(0, 5)
+                                            : ''
+                                    }
+
+                                    onChange={(e) => {
+
+                                        const startTime = e.target.value
+
+                                        // DURATION
+                                        const duration =
+                                            item?.duration_minutes || 0
+
+                                        // SPLIT
+                                        const [hours, minutes] =
+                                            startTime.split(':').map(Number)
+
+                                        // DATE
+                                        const date = new Date()
+
+                                        date.setHours(hours)
+                                        date.setMinutes(minutes + duration)
+
+                                        // FORMAT
+                                        const endHours =
+                                            String(date.getHours()).padStart(2, '0')
+
+                                        const endMinutes =
+                                            String(date.getMinutes()).padStart(2, '0')
+
+                                        const calculatedEndTime =
+                                            `${endHours}:${endMinutes}`
+
+                                        setFormData({
+
+                                            ...formData,
+
+                                            appointment_start_time: startTime,
+
+                                            end_time: calculatedEndTime
+
+                                        })
+
+                                    }}
+
+                                    className="w-full bg-gray-100 p-4 rounded-xl outline-none"
+                                />
+
+                            </div>
+
+                            {/* END TIME */}
+                            <div>
+
+                                <label className="block mb-2 text-sm font-medium">
+
+                                    Bitiş Saati
+
+                                </label>
+
+                                <input
+                                    type="time"
+
+                                    value={formData.end_time || ''}
+
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            end_time: e.target.value
+                                        })
+                                    }
+
+                                    className="w-full bg-gray-100 p-4 rounded-xl outline-none"
+                                />
+
+                            </div>
+                            {/* EMPLOYEE */}
+                            <div>
+
+                                <label className="block mb-2 text-sm font-medium">
+
+                                    Uzman Seç
+
+                                </label>
+
+                                <select
+
+                                    value={formData.employee_id || ''}
+
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            employee_id: e.target.value
+                                        })
+                                    }
+
+                                    className="w-full bg-gray-100 p-4 rounded-xl outline-none"
+                                >
+
+                                    <option value="">
+                                        Uzman Seç
+                                    </option>
+
+                                    {employees?.map(employee => (
+
+                                        <option
+                                            key={employee.id}
+                                            value={employee.id}
+                                        >
+
+                                            {employee.full_name}
+
+                                        </option>
+
+                                    ))}
+
+                                </select>
+
+                            </div>
 
                         </>
                     )}

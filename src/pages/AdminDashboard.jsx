@@ -1,44 +1,30 @@
-﻿import { useEffect, useState }
-    from 'react'
-import {
-    requestNotificationPermission
-} from '../lib/firebase'
-import {
-    sendWhatsAppMessage
-}
-    from '../lib/whatsapp'
-import { supabase }
-    from '../lib/supabase'
-import AppointmentCalendar
-    from '../components/calendar/AppointmentCalendar'
-import Sidebar
-    from '../components/Sidebar'
+﻿import { useEffect, useState } from 'react'
 
-import Header
-    from '../components/Header'
+import { requestNotificationPermission } from '../lib/firebase'
 
-import MobileTabs
-    from '../components/MobileTabs'
+import { sendWhatsAppMessage } from '../lib/whatsapp'
 
-import AppointmentTable
-    from '../components/AppointmentTable'
+import { supabase } from '../lib/supabase'
 
-import ServiceTable
-    from '../components/ServiceTable'
+import AppointmentCalendar from '../components/calendar/AppointmentCalendar'
 
-import EmployeeTable
-    from '../components/EmployeeTable'
+import Sidebar from '../components/Sidebar'
 
-import Modal
-    from '../components/Modal'
-import AvailableTimes
-    from '../components/AvailableTimes'
+import Header from '../components/Header'
 
-export default function AdminDashboard({
+import MobileTabs from '../components/MobileTabs'
 
-    logout
+import AppointmentTable from '../components/AppointmentTable'
 
-}) {
+import ServiceTable from '../components/ServiceTable'
+
+import EmployeeTable from '../components/EmployeeTable'
+
+import Modal from '../components/Modal'
+
+import AvailableTimes from '../components/AvailableTimes'
+
+export default function AdminDashboard({ logout }) {
 
     // STATES
     const [activeTab, setActiveTab] =
@@ -52,6 +38,7 @@ export default function AdminDashboard({
 
     const [appointments, setAppointments] =
         useState([])
+
     const [employeeId, setEmployeeId] =
         useState('')
 
@@ -112,9 +99,8 @@ export default function AdminDashboard({
     }
 
     useEffect(() => {
-    console.log("USE EFFECT ÇALIŞTI");
 
-       
+        requestNotificationPermission()
 
         loadDatabase()
 
@@ -132,12 +118,8 @@ export default function AdminDashboard({
                     schema: 'public',
                     table: 'appointments',
                 },
-                async (payload) => {
 
-                    console.log(
-                        'EVENT GELDİ',
-                        payload
-                    );
+                async (payload) => {
 
                     const {
                         data,
@@ -147,13 +129,13 @@ export default function AdminDashboard({
                         .select('*')
                         .order('created_at', {
                             ascending: false
-                        });
+                        })
 
                     if (!error) {
 
                         setAppointments([
                             ...(data || [])
-                        ]);
+                        ])
                     }
 
                     new Notification(
@@ -163,24 +145,19 @@ export default function AdminDashboard({
                                 payload.new.customer_name +
                                 ' yeni randevu oluşturdu',
                         }
-                    );
+                    )
                 }
             )
 
-            .subscribe((status) => {
-
-                console.log(
-                    'STATUS:',
-                    status
-                );
-            });
+            .subscribe()
 
         return () => {
 
-            supabase.removeChannel(channel);
-        };
+            supabase.removeChannel(channel)
+        }
 
-    }, []);
+    }, [])
+
     function openModal(type, item = null) {
 
         setModalType(type)
@@ -265,79 +242,156 @@ export default function AdminDashboard({
         // APPOINTMENT
         if (modalType === 'appointment') {
 
-            await supabase
+            const { data, error } = await supabase
                 .from('appointments')
                 .update({
-                    status: formData.status
+
+                    status: formData.status,
+
+                    appointment_date:
+                        formData.appointment_date,
+
+                    appointment_start_time:
+                        formData.appointment_start_time,
+
+                    end_time:
+                        formData.end_time,
+
+                    employee_id:
+                        formData.employee_id
+
                 })
                 .eq('id', selectedItem.id)
+                .select()
 
             // STATUS APPROVED OLUNCA WHATSAPP GÖNDER
-            if (formData.status === 'approved') {
+            if (formData.status === 'Onaylandı') {
+                const selectedService =
+                    services.find(
+                        service =>
+                            service.id === selectedItem.service_id
+                    )
 
+                const selectedEmployee =
+                    employees.find(
+                        employee =>
+                            employee.id === formData.employee_id
+                    )
+
+                // PHONE FORMAT
+                const customerPhone =
+                    `90${selectedItem.customer_phone.replace(/^0/, '')}`
+
+                const message =
+                    ` *Trend Beauty*
+
+Merhaba *${selectedItem.customer_name}* hanım,
+
+Randevunuz başarıyla *onaylanmıştır.* 
+
+━━━━━━━━━━━━━━━
+
+*Hizmet:*  
+${selectedService?.title || '-'}
+
+ *Uzman:*  
+${selectedEmployee?.full_name || '-'}
+
+ *Tarih:*  
+${formData.appointment_date}
+
+ *Saat:*  
+${formData.appointment_start_time}
+
+━━━━━━━━━━━━━━━
+
+Sizi salonumuzda ağırlamaktan mutluluk duyarız 
+
+ Trend Beauty
+`
+
+                // OPEN WHATSAPP
+                // SEND CUSTOMER MESSAGE
                 await sendWhatsAppMessage({
 
-                    phone: selectedItem.phone,
+                    phone: customerPhone,
 
-                    message: `
-🌸 Trend Beauty
+                    message
 
-Randevunuz onaylandı ✅
-
-📅 Tarih: ${selectedItem.date}
-🕒 Saat: ${selectedItem.time}
-
-Sizi bekliyoruz 💖
-`
                 })
             }
+            // EXPERT MESSAGE
         }
-
-        closeModal()
+            closeModal()
 
         loadDatabase()
     }
 
     return (
 
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-gray-50 flex overflow-hidden">
 
-            {/* SIDEBAR */}
-            <Sidebar
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-            />
+            {/* SIDEBAR DESKTOP */}
+            <div className="hidden md:block">
+
+                <Sidebar
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                />
+
+            </div>
 
             {/* CONTENT */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-w-0">
 
                 <Header
                     logout={logout}
                 />
 
-                <MobileTabs
-                    activeTab={activeTab}
-                    setActiveTab={setActiveTab}
-                />
+                {/* MOBILE TABS */}
+                <div className="md:hidden">
 
-                <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+                    <MobileTabs
+                        activeTab={activeTab}
+                        setActiveTab={setActiveTab}
+                    />
+
+                </div>
+
+                <main className="flex-1 p-3 md:p-6 overflow-y-auto">
 
                     {/* APPOINTMENTS */}
                     {activeTab === 'appointments' && (
 
-                        <AppointmentTable
-                            key={JSON.stringify(appointments)}
-                            appointments={[...appointments]}
-                            services={services}
-                            employees={employees}
-                            openModal={openModal}
-                            deleteItem={deleteItem}
-                       
-                        />
-                    )}
-                    {activeTab === 'appointments' && (
+                        <div className="space-y-6">
 
-                        <div className="mt-10">
+                            {/* TABLE */}
+                            <div className="overflow-x-auto bg-white rounded-2xl shadow border border-gray-200">
+
+                                <AppointmentTable
+                                    key={JSON.stringify(appointments)}
+                                    appointments={[...appointments]}
+                                    services={services}
+                                    employees={employees}
+                                    openModal={openModal}
+                                    deleteItem={deleteItem}
+                                />
+
+                            </div>
+
+                        </div>
+                    )}
+
+                    {/* CALENDAR */}
+                    {activeTab === 'calendar' && (
+
+                        <div className="mt-6 bg-white p-4 md:p-6 rounded-2xl shadow border border-gray-200 overflow-hidden">
+
+                            <h2 className="text-xl md:text-2xl font-bold mb-6">
+
+                                Randevu Takvimi
+
+                            </h2>
 
                             <AppointmentCalendar
                                 appointments={appointments}
@@ -346,141 +400,133 @@ Sizi bekliyoruz 💖
                             />
 
                         </div>
+
                     )}
-                    <div className="mt-10 bg-white p-6 rounded-2xl shadow border border-gray-200">
 
-                        <h2 className="text-2xl font-bold mb-6">
+                    {/* AVAILABLE TIMES */}
+                    {/* AVAILABLE TIMES */}
+                    {activeTab === 'available-times' && (
 
+                        <div className="mt-6 bg-white p-4 md:p-6 rounded-2xl shadow border border-gray-200 overflow-hidden">
 
-                            Canlı Müsait Saat Sistemi
+                            <h2 className="text-xl md:text-2xl font-bold mb-6">
 
-                        </h2>
+                                Canlı Müsait Saat Sistemi
 
-                        <div className="grid md:grid-cols-3 gap-4 mb-6">
+                            </h2>
 
-                            {/* SERVICE */}
-                            <select
-                                value={service}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
-                                onChange={(e) =>
-                                    setService(e.target.value)
-                                }
+                                {/* SERVICE */}
+                                <select
+                                    value={service}
 
-                                className="border rounded-xl p-3"
-                            >
+                                    onChange={(e) =>
+                                        setService(e.target.value)
+                                    }
 
-                                <option value="">
-                                    Hizmet Seç
-                                </option>
+                                    className="border rounded-xl p-3 w-full"
+                                >
 
-                                {services.map(service => (
-
-                                    <option
-                                        key={service.id}
-                                        value={service.id}
-                                    >
-
-                                        {service.title}
-
+                                    <option value="">
+                                        Hizmet Seç
                                     </option>
-                                ))}
 
-                            </select>
+                                    {services.map(service => (
 
-                            {/* EMPLOYEE */}
-                            <select
-                                value={employeeId}
+                                        <option
+                                            key={service.id}
+                                            value={service.id}
+                                        >
 
-                                onChange={(e) =>
-                                    setEmployeeId(e.target.value)
-                                }
+                                            {service.title}
 
-                                className="border rounded-xl p-3"
-                            >
+                                        </option>
+                                    ))}
 
-                                <option value="">
-                                    Uzman Seç
-                                </option>
+                                </select>
 
-                                {employees.map(employee => (
+                                {/* EMPLOYEE */}
+                                <select
+                                    value={employeeId}
 
-                                    <option
-                                        key={employee.id}
-                                        value={employee.id}
-                                    >
+                                    onChange={(e) =>
+                                        setEmployeeId(e.target.value)
+                                    }
 
-                                        {employee.full_name}
+                                    className="border rounded-xl p-3 w-full"
+                                >
 
+                                    <option value="">
+                                        Uzman Seç
                                     </option>
-                                ))}
 
-                            </select>
+                                    {employees.map(employee => (
 
-                            {/* DATE */}
-                            <input
-                                type="date"
+                                        <option
+                                            key={employee.id}
+                                            value={employee.id}
+                                        >
 
-                                value={appointmentDate}
+                                            {employee.full_name}
 
-                                onChange={(e) =>
-                                    setAppointmentDate(e.target.value)
-                                }
+                                        </option>
+                                    ))}
 
-                                className="border rounded-xl p-3"
+                                </select>
+
+                                {/* DATE */}
+                                <input
+                                    type="date"
+
+                                    value={appointmentDate}
+
+                                    onChange={(e) =>
+                                        setAppointmentDate(e.target.value)
+                                    }
+
+                                    className="border rounded-xl p-3 w-full"
+                                />
+
+                            </div>
+
+                            {/* AVAILABLE TIMES */}
+                            <AvailableTimes
+                                employeeId={employeeId}
+                                appointmentDate={appointmentDate}
+                                service={service}
                             />
+
 
                         </div>
 
-                        {/* AVAILABLE TIMES */}
-                        <AvailableTimes
-                            employeeId={employeeId}
-                            appointmentDate={appointmentDate}
-                            service={service}
-                        />
-                        <button
-
-                            onClick={() =>
-
-                                sendWhatsAppMessage({
-
-                                    phone: '905431492802',
-
-                                    message: `
-TEST MESAJI 🌸
-
-Trend Beauty
-`
-                                })
-
-                            }
-
-                            className="mt-6 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-bold transition"
-                        >
-
-                            WhatsApp Test Gönder
-
-                        </button>
-
-                    </div>
-
+                    )}
                     {/* SERVICES */}
                     {activeTab === 'services' && (
 
-                        <ServiceTable
-                            services={services}
-                            openModal={openModal}
-                            deleteItem={deleteItem}
-                        />
+                        <div className="overflow-x-auto">
+
+                            <ServiceTable
+                                services={services}
+                                openModal={openModal}
+                                deleteItem={deleteItem}
+                            />
+
+                        </div>
                     )}
 
                     {/* EMPLOYEES */}
                     {activeTab === 'employees' && (
 
-                        <EmployeeTable
-                            employees={employees}
-                            openModal={openModal}
-                            deleteItem={deleteItem}
-                        />
+                        <div className="overflow-x-auto">
+
+                            <EmployeeTable
+                                employees={employees}
+                                openModal={openModal}
+                                deleteItem={deleteItem}
+                            />
+
+                        </div>
                     )}
 
                 </main>
@@ -496,6 +542,7 @@ Trend Beauty
                 formData={formData}
                 setFormData={setFormData}
                 onSubmit={handleSave}
+                employees={employees}
             />
 
         </div>

@@ -4,6 +4,9 @@
 import moment
     from 'moment'
 
+import { useMemo }
+    from 'react'
+
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
 const localizer =
@@ -19,62 +22,109 @@ export default function AppointmentCalendar({
 
 }) {
 
+    // MOBILE CHECK
+    const isMobile =
+        window.innerWidth < 768
+
     // EVENTS
-    const events = appointments.map(app => {
+    const events = useMemo(() => {
 
-        const service =
-            services.find(
-                s => s.id === app.service_id
-            )
+        return appointments.map(app => {
 
-        const employee =
-            employees.find(
-                e => e.id === app.employee_id
-            )
+            const service =
+                services.find(
+                    s => s.id === app.service_id
+                )
 
-        // START
-        const start =
-            new Date(
-                `${app.appointment_date}T${app.appointment_start_time}`
-            )
+            const employee =
+                employees.find(
+                    e => e.id === app.employee_id
+                )
 
-        // END
-        const end =
-            new Date(
-                `${app.appointment_date}T${app.end_time}`
-            )
+            // START
+            const start =
+                new Date(
+                    `${app.appointment_date}T${app.appointment_start_time}`
+                )
 
-        return {
+            // END
+            const end =
+                new Date(
+                    `${app.appointment_date}T${app.end_time}`
+                )
 
-            title:
+            return {
 
-                `${app.customer_name}
-         - ${service?.title}
-         - ${employee?.full_name}`,
+                title:
+                    `${app.customer_name}
+ - ${service?.title}
+ - ${employee?.full_name}`,
 
-            start,
+                start,
 
-            end
-        }
-    })
+                end
+            }
+        })
+
+    }, [appointments, services, employees])
 
     return (
 
-        <div className="bg-white p-4 rounded-2xl shadow border border-gray-200 h-[700px]">
+        <div className="bg-white p-2 md:p-4 rounded-2xl shadow border border-gray-200 overflow-hidden">
 
-            <Calendar
-                localizer={localizer}
+            <div className="h-[500px] md:h-[700px] text-sm md:text-base">
 
-                events={events}
+                <Calendar
 
-                startAccessor="start"
+                    localizer={localizer}
 
-                endAccessor="end"
+                    events={events}
 
-                style={{
-                    height: '100%'
-                }}
-            />
+                    startAccessor="start"
+
+                    endAccessor="end"
+
+                    defaultView={
+                        isMobile
+                            ? 'agenda'
+                            : 'week'
+                    }
+
+                    views={
+                        isMobile
+                            ? ['agenda']
+                            : ['month', 'week', 'day', 'agenda']
+                    }
+
+                    popup
+
+                    selectable
+
+                    step={30}
+
+                    timeslots={2}
+
+                    style={{
+                        height: '100%'
+                    }}
+
+                    messages={{
+                        today: 'Bugün',
+                        previous: 'Geri',
+                        next: 'İleri',
+                        month: 'Ay',
+                        week: 'Hafta',
+                        day: 'Gün',
+                        agenda: 'Liste',
+                        date: 'Tarih',
+                        time: 'Saat',
+                        event: 'Randevu',
+                        noEventsInRange: 'Randevu bulunamadı'
+                    }}
+
+                />
+
+            </div>
 
         </div>
     )
