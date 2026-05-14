@@ -186,32 +186,30 @@ app.post(
                 );
 
             console.log("TOKENS:", tokens);
+            const response = await admin.messaging().send({
 
-            const response = await admin
-                .messaging()
-                .sendEachForMulticast({
+                token: tokens[0],
 
-                    tokens,
+                notification: {
+                    title,
+                    body,
+                },
 
+                android: {
+                    priority: "high",
                     notification: {
-                        title,
-                        body,
+                        sound: "default",
                     },
+                },
 
-                    android: {
-                        priority: "high",
-                        notification: {
-                            sound: "default"
-                        }
-                    }
+            });
 
-                });
+            console.log("SEND RESPONSE:", response);
 
             console.log(
                 "FCM RESPONSE:",
                 response
             );
-
             res.json({
                 success: true,
             });
