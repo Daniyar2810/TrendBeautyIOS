@@ -1,10 +1,5 @@
 import { initializeApp } from "firebase/app";
-
-import {
-  getMessaging,
-  getToken,
-  onMessage,
-} from "firebase/messaging";
+import { Capacitor } from "@capacitor/core";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC5h22PuYyzKZWqG85Caycet5JpsOtHVSw",
@@ -18,55 +13,44 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-export const messaging = getMessaging(app);
+// iOS native'de Service Worker yok, Firebase Messaging web SDK'sı çalışmaz
+const isNative = Capacitor.isNativePlatform();
+
+export let messaging = null;
+
+if (!isNative) {
+  const { getMessaging, onMessage } = await import("firebase/messaging");
+  messaging = getMessaging(app);
+
+  onMessage(messaging, (payload) => {
+    console.log("Yeni bildirim:", payload);
+    new Notification(payload.notification.title, {
+      body: payload.notification.body,
+    });
+  });
+}
 
 export async function requestNotificationPermission() {
-    console.log("BİLDİRİM İZNİ BAŞLADI");
-  const permission =
-    await Notification.requestPermission();
+  // iOS native'de bu fonksiyon çağrılmamalı
+  // Push notification @capacitor/push-notifications ile yönetiliyor
+  if (isNative) {
+    console.log("Native platform - Capacitor push notifications kullanılıyor");
+    return null;
+  }
 
+  console.log("BİLDİRİM İZNİ BAŞLADI");
+  const permission = await Notification.requestPermission();
   if (permission === "granted") {
-
-    const token = await getToken(
-      messaging,
-      {
-        vapidKey:
-          "BPZ6Q5GYViaAoa-v6Gx_XtpHJuCElgPt41aDq8kotIozNVj7WuHwwB-b17DioDM4OlL5BTwA45-eGVG15hv9_gg",
-      }
-    );
-
-      console.log("FCM TOKEN:", token);
-      console.log("SAVE TOKEN ÇALIŞTI");
-
-      await fetch(
-          "https://trendbeauty-server.onrender.com/save-token",
-          {
-              method: "POST",
-
-              headers: {
-                  "Content-Type": "application/json",
-              },
-
-              body: JSON.stringify({
-                  token,
-              }),
-          }
-      );
-
-
+    const { getMessaging, getToken } = await import("firebase/messaging");
+    const token = await getToken(getMessaging(app), {
+      vapidKey: "BPZ6Q5GYViaAoa-v6Gx_XtpHJuCElgPt41aDq8kotIozNVj7WuHwwB-b17DioDM4OlL5BTwA45-eGVG15hv9_gg",
+    });
+    console.log("FCM TOKEN:", token);
+    await fetch("https://trendbeauty-server.onrender.com/save-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
     return token;
   }
 }
-
-// FOREGROUND BİLDİRİM
-onMessage(messaging, (payload) => {
-
-  console.log("Yeni bildirim:", payload);
-
-  new Notification(
-    payload.notification.title,
-    {
-      body: payload.notification.body,
-    }
-  );
-});

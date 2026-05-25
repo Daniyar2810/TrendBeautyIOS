@@ -1,38 +1,30 @@
-export async function sendWhatsAppMessage({
-    phone,
-    message,
-}) {
+const FONNTE_TOKEN = 'caQMHog1uhGECGrXA65T'
+
+export async function sendWhatsAppMessage({ phone, message }) {
     try {
-        // URL'yi bir değişkene alıyoruz. 
-        // Geliştirme aşamasında localhost, canlıda ise kendi API adresini kullanır.
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+        let cleanPhone = phone.replace(/\D/g, '')
+        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.slice(1)
+        if (!cleanPhone.startsWith('90')) cleanPhone = '90' + cleanPhone
 
-        const response = await fetch(
-            `${API_URL}/send-whatsapp`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    phone,
-                    message,
-                }),
-            }
-        );
+        console.log('Gönderilen numara:', cleanPhone)
 
-        const data = await response.json();
-
-        if (data.success) {
-            console.log("WhatsApp mesajı başarıyla sıraya alındı ✅");
-            return { success: true };
-        } else {
-            console.error("WhatsApp gönderilemedi: ", data.error);
-            return { success: false, error: data.error };
-        }
-
+        const response = await fetch('https://api.fonnte.com/send', {
+            method: 'POST',
+            headers: {
+                'Authorization': FONNTE_TOKEN,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                target: cleanPhone,
+                message: message,
+                countryCode: '90'
+            }).toString()
+        })
+        const data = await response.json()
+        console.log('WhatsApp response:', data)
+        return { success: true }
     } catch (err) {
-        console.error("WhatsApp API Hatası:", err);
-        return { success: false, error: err.message };
+        console.error('WhatsApp hatası:', err)
+        return { success: false }
     }
 }

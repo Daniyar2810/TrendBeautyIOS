@@ -1,197 +1,30 @@
-﻿import { useEffect, useState } from 'react'
-import { PushNotifications } from '@capacitor/push-notifications'
-
+import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
-
 import LoginPage from './components/LoginPage'
 import AdminDashboard from './pages/AdminDashboard'
 
 export default function App() {
+  const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-    const [session, setSession] = useState(null)
-    const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setLoading(false)
+    })
 
-    // PUSH NOTIFICATION
-    useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
 
-        const setupPush = async () => {
+    return () => subscription.unsubscribe()
+  }, [])
 
-            try {
+  if (loading) return null
 
-                // İZİN İSTE
-                const permission =
-                    await PushNotifications.requestPermissions()
+  if (!session) {
+    return <LoginPage />
+  }
 
-                console.log(
-                    'PERMISSION:',
-                    permission
-                )
-
-                if (
-                    permission.receive !== 'granted'
-                ) {
-
-                    console.log(
-                        'Bildirim izni reddedildi'
-                    )
-
-                    return
-                }
-
-                // REGISTER
-                await PushNotifications.register()
-
-                console.log(
-                    'PUSH REGISTER OK'
-                )
-
-                PushNotifications.addListener(
-                    'registration',
-                    async (token) => {
-
-                        console.log(
-                            'REGISTER TOKEN:',
-                            token.value
-                        )
-
-                        try {
-
-                            console.log('FETCH BAŞLIYOR')
-
-                            const response = await fetch(
-                                'https://trendbeauty-server.onrender.com/save-token',
-                                {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({
-                                        token: token.value,
-                                    }),
-                                }
-                            )
-
-                            console.log('FETCH BİTTİ')
-
-                            const text =
-                                await response.text()
-
-                            console.log(
-                                'RAW RESPONSE:',
-                                text
-                            )
-
-                            console.log(
-                                'STATUS:',
-                                response.status
-                            )
-
-                        } catch (err) {
-
-                            console.log(
-                                'FETCH HATASI:',
-                                err
-                            )
-
-                        }
-
-                    }
-                )
-
-                // PUSH GELDİ
-                await PushNotifications.addListener(
-                    'pushNotificationReceived',
-                    (notification) => {
-
-                        console.log(
-                            'PUSH GELDİ:',
-                            notification
-                        )
-
-                    }
-                )
-
-                // BİLDİRİME TIKLANDI
-                await PushNotifications.addListener(
-                    'pushNotificationActionPerformed',
-                    (action) => {
-
-                        console.log(
-                            'BİLDİRİME TIKLANDI:',
-                            action
-                        )
-
-                    }
-                )
-
-            } catch (error) {
-
-                console.error(
-                    'Push setup hatası:',
-                    error
-                )
-
-            }
-        }
-
-        setupPush()
-
-        return () => {
-            PushNotifications.removeAllListeners()
-        }
-
-    }, [])
-
-    // SESSION CHECK
-    useEffect(() => {
-
-        supabase.auth
-            .getSession()
-            .then(({ data }) => {
-
-                setSession(data.session)
-                setLoading(false)
-
-            })
-
-        const { data: listener } =
-            supabase.auth.onAuthStateChange(
-                (_event, session) => {
-
-                    setSession(session)
-
-                }
-            )
-
-        return () => {
-            listener.subscription.unsubscribe()
-        }
-
-    }, [])
-
-    // LOADING
-    if (loading) {
-
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                Yükleniyor...
-            </div>
-        )
-
-    }
-
-    // LOGIN
-    if (!session) {
-        return <LoginPage />
-    }
-
-    // LOGOUT
-    async function logout() {
-        await supabase.auth.signOut()
-    }
-
-    // DASHBOARD
-    return (
-        <AdminDashboard logout={logout} />
-    )
+  return <AdminDashboard logout={() => supabase.auth.signOut()} />
 }

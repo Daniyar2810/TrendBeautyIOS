@@ -1,39 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  base: './',
   plugins: [
-
     react(),
-
     tailwindcss(),
-
-    VitePWA({
-      registerType: 'autoUpdate',
-
-      manifest: {
-        name: 'Trend Beauty',
-        short_name: 'TrendBeauty',
-        theme_color: '#ec4899',
-        background_color: '#ffffff',
-        display: 'standalone',
-
-        icons: [
-          {
-            src: '/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-
-          {
-            src: '/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-        ],
-      },
-    }),
+ 
   ],
+  build: {
+    target: 'es2015', // Eski nesil cihazlar ve kararlı WebView uyumluluğu için
+    
+    chunkSizeWarningLimit: 5000,
+  rollupOptions:{
+  output:{
+      format:'es'
+  }
+  }
+  }
 })

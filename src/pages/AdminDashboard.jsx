@@ -1,7 +1,7 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { requestNotificationPermission } from '../lib/firebase';
-import { sendWhatsAppMessage } from '../lib/whatsapp';
 import { supabase } from '../lib/supabase';
+import { sendTelegramMessage } from '../lib/telegram';
 
 // Bileşenler
 import AppointmentCalendar from '../components/calendar/AppointmentCalendar';
@@ -15,7 +15,6 @@ import Modal from '../components/Modal';
 import AvailableTimes from '../components/AvailableTimes';
 
 export default function AdminDashboard({ logout }) {
-    // STATES
     const [activeTab, setActiveTab] = useState('appointments');
     const [services, setServices] = useState([]);
     const [employees, setEmployees] = useState([]);
@@ -23,23 +22,41 @@ export default function AdminDashboard({ logout }) {
     const [employeeId, setEmployeeId] = useState('');
     const [appointmentDate, setAppointmentDate] = useState('');
     const [service, setService] = useState('');
-
-    // MODAL STATES
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState('');
     const [selectedItem, setSelectedItem] = useState(null);
     const [formData, setFormData] = useState({});
+    const [toast, setToast] = useState('');
 
-    // VERİLERİ YÜKLE
+    function showToast(msg) {
+        setToast(msg);
+        setTimeout(() => setToast(''), 3000);
+    }
+
+    function openWhatsApp(phone, message) {
+    const cleanPhone = `90${phone.replace(/\D/g, '').replace(/^90/, '').replace(/^0/, '')}`
+    const encodedMsg = encodeURIComponent(message)
+    const url = `https://wa.me/${cleanPhone}?text=${encodedMsg}`
+    
+    const link = document.createElement('a')
+    link.href = url
+    // target="_blank" kaldırıldı, iOS'ta direkt açılsın
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+}
+
     async function loadDatabase() {
-        const { data: sData } = await supabase.from('services').select('*');
-        setServices(sData || []);
-
-        const { data: eData } = await supabase.from('employees').select('*');
-        setEmployees(eData || []);
-
-        const { data: aData } = await supabase.from('appointments').select('*').order('created_at', { ascending: false });
-        setAppointments(aData || []);
+        try {
+            const { data: sData } = await supabase.from('services').select('*');
+            setServices(sData || []);
+            const { data: eData } = await supabase.from('employees').select('*');
+            setEmployees(eData || []);
+            const { data: aData } = await supabase.from('appointments').select('*').order('created_at', { ascending: false });
+            setAppointments(aData || []);
+        } catch (err) {
+            console.error("Veri yükleme hatası:", err);
+        }
     }
 
     useEffect(() => {
@@ -47,26 +64,27 @@ export default function AdminDashboard({ logout }) {
         loadDatabase();
     }, []);
 
-    // REAL-TIME DİNLEME
+    // REAL-TIME + TELEGRAM BİLDİRİM
     useEffect(() => {
         const channel = supabase
             .channel('db-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, async (payload) => {
-                loadDatabase(); // Herhangi bir değişiklikte listeyi yenile
+                loadDatabase();
 
-                // Sadece yeni randevu düştüğünde bildirim gönder
-                if (payload.eventType === 'INSERT') {
-                    new Notification('Yeni Randevu 📅', {
-                        body: `${payload.new.customer_name} yeni bir randevu oluşturdu.`,
-                    });
+                if (payload.eventType === 'INSERT' || payload.event === 'INSERT' || payload.type === 'INSERT') {
+                    const yeni = payload.new;
+                    await sendTelegramMessage(
+                        `🔔 Yeni Randevu!\n\n👤 Müşteri: ${yeni.customer_name}\n📞 Telefon: ${yeni.customer_phone}\n📅 Tarih: ${yeni.appointment_date}\n⏰ Saat: ${yeni.appointment_start_time}`
+                    );
                 }
             })
-            .subscribe();
+            .subscribe((status) => {
+                console.log('CHANNEL STATUS:', status);
+            });
 
         return () => { supabase.removeChannel(channel); };
     }, []);
 
-    // MODAL İŞLEMLERİ
     function openModal(type, item = null) {
         setModalType(type);
         setSelectedItem(item);
@@ -78,66 +96,61 @@ export default function AdminDashboard({ logout }) {
         setIsModalOpen(false);
     }
 
-    // SİLME İŞLEMİ
     async function deleteItem(type, id) {
-        const confirmDelete = window.confirm("Bu kaydı silmek istediğinize emin misiniz?");
-        if (!confirmDelete) return;
-
         let tableName = type === 'service' ? 'services' : type === 'employee' ? 'employees' : 'appointments';
         await supabase.from(tableName).delete().eq('id', id);
         loadDatabase();
+        showToast('Kayıt silindi.');
     }
 
-    // WHATSAPP MESAJ FORMATLAYICI (iOS UYUMLU)
-    const formatAndSendWhatsApp = async (phone, message) => {
-        if (!phone) return;
-        const cleanPhone = `90${phone.replace(/\D/g, '').replace(/^90/, '').replace(/^0/, '')}`;
-        return await sendWhatsAppMessage({ phone: cleanPhone, message });
-    };
-
-    // TABLODAN HIZLI ONAY FONKSİYONU
     async function handleApproveQuick(app, serviceObj, employeeObj) {
-        const confirmApprove = window.confirm(`${app.customer_name} randevusu onaylansın ve WhatsApp mesajları gönderilsin mi?`);
-        if (!confirmApprove) return;
-
         try {
-            // 1. Veritabanı Güncelle
             const { error } = await supabase.from('appointments').update({ status: 'Onaylandı' }).eq('id', app.id);
             if (error) throw error;
 
-            // 2. Müşteri Mesajı
-            const customerMsg = `*Trend Beauty* ✅\n\nMerhaba *${app.customer_name}*,\n${app.appointment_date} tarihindeki *${serviceObj?.title}* randevunuz onaylanmıştır.\n\n⏰ Saat: ${app.appointment_start_time}\n\nSizi bekliyoruz!`;
-            await formatAndSendWhatsApp(app.customer_phone, customerMsg);
+            // Telegram bildirimi
+            await sendTelegramMessage(
+                `✅ Randevu Onaylandı\n\n👤 ${app.customer_name}\n📅 ${app.appointment_date} - ${app.appointment_start_time}\n✨ ${serviceObj?.title || '-'}`
+            );
 
-            // 3. Uzman Mesajı
-            if (employeeObj?.phone) {
-                const empMsg = `*Yeni İş Ataması!* 💇\n\nMüşteri: ${app.customer_name}\nTarih: ${app.appointment_date}\nSaat: ${app.appointment_start_time}\nHizmet: ${serviceObj?.title}`;
-                await formatAndSendWhatsApp(employeeObj.phone, empMsg);
+            // Müşteriye WhatsApp
+            if (app.customer_phone) {
+                openWhatsApp(
+                    app.customer_phone,
+                    `Merhaba ${app.customer_name}, ${app.appointment_date} tarihindeki *${serviceObj?.title}* randevunuz onaylandı! ✅\n\n⏰ Saat: ${app.appointment_start_time}\n📍 Trend Beauty Kadıköy\n\nSizi bekliyoruz!`
+                )
             }
 
-            alert("Onaylandı ve Bildirimler Gönderildi!");
+            // Uzmana WhatsApp (kısa gecikme ile aç)
+            if (employeeObj?.phone) {
+                setTimeout(() => {
+                    openWhatsApp(
+                        employeeObj.phone,
+                        `Yeni randevu atandı! 💇\n\nMüşteri: ${app.customer_name}\nTarih: ${app.appointment_date}\nSaat: ${app.appointment_start_time}\nHizmet: ${serviceObj?.title}`
+                    )
+                }, 1500)
+            }
+
+            showToast('Randevu onaylandı!');
             loadDatabase();
         } catch (err) {
             console.error(err);
-            alert("İşlem başarısız.");
+            showToast('İşlem başarısız.');
         }
     }
 
-    // MODAL KAYDETME (DÜZENLEME VE EKLEME)
     async function handleSave() {
         try {
             if (modalType === 'service') {
                 if (selectedItem) await supabase.from('services').update(formData).eq('id', selectedItem.id);
                 else await supabase.from('services').insert([formData]);
-            }
 
-            else if (modalType === 'employee') {
+            } else if (modalType === 'employee') {
                 if (selectedItem) await supabase.from('employees').update(formData).eq('id', selectedItem.id);
                 else await supabase.from('employees').insert([formData]);
-            }
 
-            else if (modalType === 'appointment') {
-                await supabase.from('appointments').update({
+            } else if (modalType === 'appointment') {
+                const { error } = await supabase.from('appointments').update({
                     status: formData.status,
                     appointment_date: formData.appointment_date,
                     appointment_start_time: formData.appointment_start_time,
@@ -145,42 +158,68 @@ export default function AdminDashboard({ logout }) {
                     employee_id: formData.employee_id
                 }).eq('id', selectedItem.id);
 
-                // Modal'dan "Onaylandı" seçildiyse de mesaj gönder
-                if (formData.status === 'Onaylandı') {
-                    const s = services.find(x => x.id === selectedItem.service_id);
-                    const e = employees.find(x => x.id === formData.employee_id);
+                if (error) throw error;
 
-                    const msg = `*Trend Beauty* ✅\n\nMerhaba *${selectedItem.customer_name}*,\nRandevunuz *Onaylanmıştır.*\n\nTarih: ${formData.appointment_date}\nSaat: ${formData.appointment_start_time}\nUzman: ${e?.full_name || '-'}`;
-                    await formatAndSendWhatsApp(selectedItem.customer_phone, msg);
+                if (formData.status === 'Onaylandı') {
+                    const e = employees.find(x => x.id === formData.employee_id);
+                    const s = services.find(x => x.id === selectedItem.service_id);
+
+                    // Telegram bildirimi
+                    await sendTelegramMessage(
+                        `✅ Randevu Güncellendi\n\n👤 ${selectedItem.customer_name}\n📅 ${formData.appointment_date} - ${formData.appointment_start_time}\n👩‍💼 Uzman: ${e?.full_name || '-'}`
+                    );
+
+                    // Müşteriye WhatsApp
+                    if (selectedItem.customer_phone) {
+                        openWhatsApp(
+                            selectedItem.customer_phone,
+                            `Merhaba ${selectedItem.customer_name}, randevunuz onaylandı! ✅\n\n📅 Tarih: ${formData.appointment_date}\n⏰ Saat: ${formData.appointment_start_time}\n👩‍💼 Uzman: ${e?.full_name || '-'}\n📍 Trend Beauty Kadıköy\n\nSizi bekliyoruz!`
+                        )
+                    }
+
+                    // Uzmana WhatsApp
+                    if (e?.phone) {
+                        setTimeout(() => {
+                            openWhatsApp(
+                                e.phone,
+                                `Randevu güncellendi! 💇\n\nMüşteri: ${selectedItem.customer_name}\nTarih: ${formData.appointment_date}\nSaat: ${formData.appointment_start_time}\nHizmet: ${s?.title || '-'}`
+                            )
+                        }, 1500)
+                    }
                 }
             }
 
             closeModal();
-            loadDatabase();
+            await loadDatabase();
+            showToast('Başarıyla kaydedildi.');
         } catch (error) {
             console.error(error);
-            alert("Kaydedilirken bir hata oluştu.");
+            showToast('Kaydedilirken bir hata oluştu.');
         }
     }
 
     return (
         <div className="min-h-screen bg-gray-50 flex overflow-hidden">
-            {/* SIDEBAR DESKTOP */}
+
+            {/* TOAST BİLDİRİM */}
+            {toast && (
+                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-6 py-3 rounded-xl shadow-xl text-sm font-medium">
+                    {toast}
+                </div>
+            )}
+
             <div className="hidden md:block">
                 <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </div>
 
-            {/* CONTENT */}
             <div className="flex-1 flex flex-col min-w-0">
                 <Header logout={logout} />
 
-                {/* MOBILE TABS */}
                 <div className="md:hidden">
                     <MobileTabs activeTab={activeTab} setActiveTab={setActiveTab} />
                 </div>
 
                 <main className="flex-1 p-3 md:p-6 overflow-y-auto">
-                    {/* APPOINTMENTS TAB */}
                     {activeTab === 'appointments' && (
                         <div className="space-y-6">
                             <div className="overflow-x-auto bg-white rounded-2xl shadow border border-gray-200">
@@ -191,13 +230,13 @@ export default function AdminDashboard({ logout }) {
                                     employees={employees}
                                     openModal={openModal}
                                     deleteItem={deleteItem}
-                                    onApprove={handleApproveQuick} // Hızlı onay prop'u
+                                    onApprove={handleApproveQuick}
+                                    refreshData={loadDatabase}
                                 />
                             </div>
                         </div>
                     )}
 
-                    {/* CALENDAR TAB */}
                     {activeTab === 'calendar' && (
                         <div className="mt-6 bg-white p-4 md:p-6 rounded-2xl shadow border border-gray-200 overflow-hidden">
                             <h2 className="text-xl md:text-2xl font-bold mb-6">Randevu Takvimi</h2>
@@ -205,7 +244,6 @@ export default function AdminDashboard({ logout }) {
                         </div>
                     )}
 
-                    {/* AVAILABLE TIMES TAB */}
                     {activeTab === 'available-times' && (
                         <div className="mt-6 bg-white p-4 md:p-6 rounded-2xl shadow border border-gray-200 overflow-hidden">
                             <h2 className="text-xl md:text-2xl font-bold mb-6">Canlı Müsait Saat Sistemi</h2>
@@ -224,19 +262,16 @@ export default function AdminDashboard({ logout }) {
                         </div>
                     )}
 
-                    {/* SERVICES TAB */}
                     {activeTab === 'services' && (
                         <ServiceTable services={services} openModal={openModal} deleteItem={deleteItem} />
                     )}
 
-                    {/* EMPLOYEES TAB */}
                     {activeTab === 'employees' && (
                         <EmployeeTable employees={employees} openModal={openModal} deleteItem={deleteItem} />
                     )}
                 </main>
             </div>
 
-            {/* GLOBAL MODAL */}
             <Modal
                 isOpen={isModalOpen}
                 onClose={closeModal}
