@@ -2,6 +2,233 @@ import React, { useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { sendWhatsAppMessage } from '../lib/whatsapp';
 
+// ── Yeni Randevu Modalı ──────────────────────────────────────────────────────
+function NewAppointmentModal({ services, employees, defaultDate, onClose, onSaved }) {
+    const [form, setForm] = useState({
+        customer_name: '',
+        customer_phone: '',
+        appointment_date: defaultDate,
+        appointment_start_time: '',
+        service_id: '',
+        employee_id: '',
+        notes: '',
+        status: 'Beklemede',
+    });
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+
+    const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+    // Seçilen hizmete göre bitiş saatini ve fiyatı hesapla
+    const selectedService = services.find(s => String(s.id) === form.service_id);
+    const totalPrice = selectedService?.price ?? '';
+
+    function calcEndTime(start, durationMin) {
+        if (!start || !durationMin) return '';
+        const [h, m] = start.split(':').map(Number);
+        const total = h * 60 + m + Number(durationMin);
+        return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+    }
+
+    const endTime = calcEndTime(form.appointment_start_time, selectedService?.duration_minutes);
+
+    const handleSave = async () => {
+        if (!form.customer_name || !form.appointment_date || !form.appointment_start_time || !form.service_id || !form.employee_id) {
+            setError('Lütfen zorunlu alanları doldurun.');
+            return;
+        }
+        setSaving(true);
+        setError('');
+        try {
+            const { error: dbError } = await supabase.from('appointments').insert([{
+                customer_name: form.customer_name,
+                customer_phone: form.customer_phone,
+                appointment_date: form.appointment_date,
+                appointment_start_time: form.appointment_start_time,
+                end_time: endTime,
+                service_id: form.service_id,
+                employee_id: form.employee_id,
+                notes: form.notes,
+                status: form.status,
+                duration_minutes: selectedService?.duration_minutes ?? null,
+                total_price: totalPrice || null,
+            }]);
+            if (dbError) throw dbError;
+            onSaved();
+            onClose();
+        } catch (e) {
+            setError(e.message || 'Kayıt sırasında hata oluştu.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                    <div>
+                        <h3 className="text-lg font-extrabold text-gray-800">Yeni Randevu</h3>
+                        <p className="text-xs text-gray-400">Tüm alanları doldurup kaydedin</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-500 text-lg font-bold transition-all"
+                    >
+                        ×
+                    </button>
+                </div>
+
+                {/* Body */}
+                <div className="overflow-y-auto px-6 py-4 space-y-4">
+                    {error && (
+                        <div className="bg-red-50 text-red-600 text-sm px-4 py-2 rounded-xl border border-red-200">
+                            {error}
+                        </div>
+                    )}
+
+                    {/* Müşteri Adı */}
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Müşteri Adı <span className="text-red-400">*</span></label>
+                        <input
+                            type="text"
+                            placeholder="Ad Soyad"
+                            value={form.customer_name}
+                            onChange={e => set('customer_name', e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none"
+                        />
+                    </div>
+
+                    {/* Telefon */}
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Telefon</label>
+                        <input
+                            type="tel"
+                            placeholder="05XX XXX XX XX"
+                            value={form.customer_phone}
+                            onChange={e => set('customer_phone', e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none"
+                        />
+                    </div>
+
+                    {/* Tarih + Saat */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Tarih <span className="text-red-400">*</span></label>
+                            <input
+                                type="date"
+                                value={form.appointment_date}
+                                onChange={e => set('appointment_date', e.target.value)}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Başlangıç Saati <span className="text-red-400">*</span></label>
+                            <input
+                                type="time"
+                                value={form.appointment_start_time}
+                                onChange={e => set('appointment_start_time', e.target.value)}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Hizmet */}
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Hizmet <span className="text-red-400">*</span></label>
+                        <select
+                            value={form.service_id}
+                            onChange={e => set('service_id', e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none"
+                        >
+                            <option value="">Hizmet seçin</option>
+                            {services.map(s => (
+                                <option key={s.id} value={String(s.id)}>
+                                    {s.title} — ₺{s.price} ({s.duration_minutes} dk)
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Uzman */}
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Uzman <span className="text-red-400">*</span></label>
+                        <select
+                            value={form.employee_id}
+                            onChange={e => set('employee_id', e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none"
+                        >
+                            <option value="">Uzman seçin</option>
+                            {employees.map(e => (
+                                <option key={e.id} value={String(e.id)}>{e.full_name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Durum */}
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Durum</label>
+                        <select
+                            value={form.status}
+                            onChange={e => set('status', e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none"
+                        >
+                            <option value="Beklemede">Beklemede</option>
+                            <option value="Onaylandı">Onaylandı</option>
+                            <option value="İptal">İptal</option>
+                        </select>
+                    </div>
+
+                    {/* Notlar */}
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Notlar</label>
+                        <textarea
+                            rows={2}
+                            placeholder="Ek bilgi..."
+                            value={form.notes}
+                            onChange={e => set('notes', e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-300 outline-none resize-none"
+                        />
+                    </div>
+
+                    {/* Özet (otomatik hesaplanan) */}
+                    {selectedService && form.appointment_start_time && (
+                        <div className="bg-rose-50 border border-rose-100 rounded-xl px-4 py-3 text-sm text-gray-700 space-y-1">
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">Bitiş saati</span>
+                                <span className="font-bold">{endTime}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">Toplam tutar</span>
+                                <span className="font-bold text-rose-600">₺{totalPrice}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all"
+                    >
+                        İptal
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="flex-1 px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 disabled:opacity-60 text-white text-sm font-bold transition-all shadow-sm"
+                    >
+                        {saving ? 'Kaydediliyor...' : '✓ Kaydet'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Ana Bileşen ──────────────────────────────────────────────────────────────
 export default function AppointmentTable({
     appointments,
     services,
@@ -10,7 +237,6 @@ export default function AppointmentTable({
     deleteItem,
     refreshData
 }) {
-    // Timezone-safe tarih string'i
     const toDateStr = (d) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -20,6 +246,7 @@ export default function AppointmentTable({
     const [selectedDate, setSelectedDate] = useState(todayStr);
     const [filterEmployee, setFilterEmployee] = useState('');
     const [filterService, setFilterService] = useState('');
+    const [showNewModal, setShowNewModal] = useState(false);   // ← YENİ
 
     function changeDay(delta) {
         const [year, month, day] = selectedDate.split('-').map(Number);
@@ -85,9 +312,20 @@ export default function AppointmentTable({
                     <h2 className="text-2xl font-extrabold text-gray-800">Randevular</h2>
                     <p className="text-gray-500 text-sm">Günlük randevu takibi</p>
                 </div>
-                <span className="bg-rose-100 text-rose-600 text-sm font-bold px-3 py-1 rounded-full">
-                    {filtered.length} randevu
-                </span>
+
+                {/* ── Sağ taraf: badge + YENİ RANDEVU butonu ── */}
+                <div className="flex items-center gap-2">
+                    <span className="bg-rose-100 text-rose-600 text-sm font-bold px-3 py-1 rounded-full">
+                        {filtered.length} randevu
+                    </span>
+                    <button
+                        onClick={() => setShowNewModal(true)}
+                        className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white text-sm font-bold px-4 py-2 rounded-xl shadow-sm transition-all"
+                    >
+                        <span className="text-base leading-none">+</span>
+                        Yeni Randevu
+                    </button>
+                </div>
             </div>
 
             {/* GÜN NAVİGASYONU */}
@@ -153,7 +391,13 @@ export default function AppointmentTable({
             {filtered.length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
                     <div className="text-5xl mb-3">📅</div>
-                    <div className="font-medium text-gray-500">Bu gün için randevu bulunamadı</div>
+                    <div className="font-medium text-gray-500 mb-4">Bu gün için randevu bulunamadı</div>
+                    <button
+                        onClick={() => setShowNewModal(true)}
+                        className="inline-flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold px-5 py-2.5 rounded-xl shadow-sm transition-all"
+                    >
+                        + Yeni Randevu Ekle
+                    </button>
                 </div>
             ) : (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
@@ -240,6 +484,17 @@ export default function AppointmentTable({
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            {/* YENİ RANDEVU MODALI */}
+            {showNewModal && (
+                <NewAppointmentModal
+                    services={services}
+                    employees={employees}
+                    defaultDate={selectedDate}
+                    onClose={() => setShowNewModal(false)}
+                    onSaved={() => { if (refreshData) refreshData(); }}
+                />
             )}
         </div>
     );
