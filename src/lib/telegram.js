@@ -1,4 +1,4 @@
-const TELEGRAM_TOKEN = '8828941554:AAFrA7n-qoVND_dztPc6Eb90ExBqhuLyDEI'
+const TELEGRAM_TOKEN = '8867330084:AAGIGHjAItMDSFDrshYsa5SeyKrv5hZSMt4'
 const CHAT_ID = '-1003961156030'  // ← yeni supergroup ID
 
 export async function sendTelegramMessage(message) {
